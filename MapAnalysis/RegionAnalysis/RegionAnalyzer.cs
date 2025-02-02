@@ -26,6 +26,7 @@ public class RegionAnalyzer : IRegionAnalyzer {
     private readonly IUnitsTracker _unitsTracker;
     private readonly IPathfinder<Vector2> _pathfinder;
     private readonly FootprintCalculator _footprintCalculator;
+    private readonly IMapFileNameFormatter _mapFileNameFormatter;
     private readonly string _mapFileName;
 
     private const float RegionZMultiplier = 8;
@@ -61,6 +62,7 @@ public class RegionAnalyzer : IRegionAnalyzer {
         IUnitsTracker unitsTracker,
         IPathfinder<Vector2> pathfinder,
         FootprintCalculator footprintCalculator,
+        IMapFileNameFormatter mapFileNameFormatter,
         string mapFileName
     ) {
         _logger = logger.CreateNamed("RegionAnalyzer");
@@ -73,6 +75,7 @@ public class RegionAnalyzer : IRegionAnalyzer {
         _unitsTracker = unitsTracker;
         _pathfinder = pathfinder;
         _footprintCalculator = footprintCalculator;
+        _mapFileNameFormatter = mapFileNameFormatter;
         _mapFileName = mapFileName;
     }
 
@@ -89,8 +92,8 @@ public class RegionAnalyzer : IRegionAnalyzer {
             return;
         }
 
-        var cellsToConsider = gameState.Terrain.WalkableCells;
-        _logger.Info($"Starting region analysis on {cellsToConsider.Count} cells ({gameState.Terrain.MaxX}x{gameState.Terrain.MaxY})");
+        var cellsToConsider = _terrainTracker.Cells.ToList();
+        _logger.Info($"Starting region analysis on {cellsToConsider.Count} cells ({_terrainTracker.MaxX}x{_terrainTracker.MaxY})");
 
         var ramps = _rampFinder.FindRamps(cellsToConsider);
         var chokePoints = _chokeFinder.FindChokePoints();
@@ -98,7 +101,7 @@ public class RegionAnalyzer : IRegionAnalyzer {
         var noise = cellsToConsider.Except(regions.SelectMany(region => region.Cells));
 
         _regionsData = new RegionsData(regions, ramps, noise, chokePoints);
-        _regionsRepository.Save(_regionsData, gameState.MapName);
+        _regionsRepository.Save(_regionsData, _mapFileName);
 
         var nbRegions = _regionsData.Regions.Count;
         var nbRamps = _regionsData.Ramps.Count;
@@ -388,7 +391,7 @@ public class RegionAnalyzer : IRegionAnalyzer {
             mapImage.SetCellColor(cell, splitColor);
         }
 
-        mapImage.Save(FileNameFormatter.FormatDataFileName($"RegionSplit_{DateTime.UtcNow.Ticks}", _mapFileName, "png"));
+        mapImage.Save(_mapFileNameFormatter.Format($"RegionSplit_{DateTime.UtcNow.Ticks}", _mapFileName));
     }
 
     /// <summary>
@@ -419,6 +422,6 @@ public class RegionAnalyzer : IRegionAnalyzer {
             }
         }
 
-        mapImage.Save(FileNameFormatter.FormatDataFileName("UnreachableNeighbors", _mapFileName, "png"));
+        mapImage.Save(_mapFileNameFormatter.Format("UnreachableNeighbors", _mapFileName));
     }
 }

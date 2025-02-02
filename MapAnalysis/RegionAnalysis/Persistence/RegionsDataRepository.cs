@@ -5,22 +5,23 @@ using SC2Client;
 namespace MapAnalysis.RegionAnalysis.Persistence;
 
 public class RegionsDataRepository<TRegionsData> : IMapDataRepository<TRegionsData> where TRegionsData : IRegionsData {
+    private const string RegionsTopic = "Regions";
+
     private readonly FootprintCalculator _footprintCalculator;
     private readonly IMapImageFactory _mapImageFactory;
-
-    private readonly JsonMapDataRepository<TRegionsData> _jsonMapDataRepository;
-
-    private const string FileNameId = "Regions";
+    private readonly IMapDataRepository<TRegionsData> _jsonMapDataRepository;
+    private readonly IMapFileNameFormatter _mapFileNameFormatter;
 
     public RegionsDataRepository(
-        ILogger logger,
         FootprintCalculator footprintCalculator,
-        IMapImageFactory mapImageFactory
+        IMapImageFactory mapImageFactory,
+        IMapDataRepository<TRegionsData> jsonMapDataRepository,
+        IMapFileNameFormatter mapFileNameFormatter
     ) {
         _footprintCalculator = footprintCalculator;
         _mapImageFactory = mapImageFactory;
-
-        _jsonMapDataRepository = new JsonMapDataRepository<TRegionsData>(logger, mapFileName => FileNameFormatter.FormatDataFileName(FileNameId, mapFileName, "json"));
+        _jsonMapDataRepository = jsonMapDataRepository;
+        _mapFileNameFormatter = mapFileNameFormatter;
     }
 
     /// <summary>
@@ -29,7 +30,7 @@ public class RegionsDataRepository<TRegionsData> : IMapDataRepository<TRegionsDa
     /// <param name="regionsData">The regions data to save.</param>
     /// <param name="mapFileName"></param>
     public void Save(TRegionsData regionsData, string mapFileName) {
-        _jsonMapDataRepository.Save(regionsData, mapFileName);
+        _jsonMapDataRepository.Save(regionsData, FormatMapFileName(mapFileName));
         SaveAsImage(regionsData.Regions, mapFileName);
     }
 
@@ -38,7 +39,7 @@ public class RegionsDataRepository<TRegionsData> : IMapDataRepository<TRegionsDa
     /// </summary>
     /// <returns>The loaded regions data.</returns>
     public TRegionsData Load(string mapFileName) {
-        return _jsonMapDataRepository.Load(mapFileName);
+        return _jsonMapDataRepository.Load(FormatMapFileName(mapFileName));
     }
 
     /// <summary>
@@ -58,7 +59,7 @@ public class RegionsDataRepository<TRegionsData> : IMapDataRepository<TRegionsDa
             }
         }
 
-        mapImage.Save(FileNameFormatter.FormatDataFileName(FileNameId, mapFileName, "png"));
+        mapImage.Save(FormatMapFileName(mapFileName));
     }
 
     /// <summary>
@@ -81,5 +82,9 @@ public class RegionsDataRepository<TRegionsData> : IMapDataRepository<TRegionsDa
                 mapImage.SetCellColor(resourceCell, resourceColor);
             }
         }
+    }
+
+    private string FormatMapFileName(string mapFileName) {
+        return _mapFileNameFormatter.Format(RegionsTopic, mapFileName);
     }
 }

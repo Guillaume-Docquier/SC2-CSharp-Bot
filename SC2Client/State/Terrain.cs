@@ -1,36 +1,64 @@
 ﻿using System.Numerics;
 using SC2APIProtocol;
+using SC2Client.ExtensionMethods;
+using SC2Client.GameData;
 
 namespace SC2Client.State;
 
 public class Terrain : ITerrain {
+    private readonly FootprintCalculator _footprintCalculator;
+
     private readonly Dictionary<Vector2, float> _cellHeights;
     private readonly HashSet<Vector2> _cells;
-    private readonly HashSet<Vector2> _walkableCells;
-    private readonly HashSet<Vector2> _buildableCells;
+
+    private HashSet<Vector2> _obstructedCells = new HashSet<Vector2>();
+    private HashSet<Vector2> _walkableCells = new HashSet<Vector2>();
+    private HashSet<Vector2> _buildableCells = new HashSet<Vector2>();
 
     public int MaxX { get; }
     public int MaxY { get; }
     public IReadOnlyDictionary<Vector2, float> CellHeights => _cellHeights;
     public IReadOnlySet<Vector2> Cells => _cells;
+    public IReadOnlySet<Vector2> ObstructedCells => _obstructedCells;
     public IReadOnlySet<Vector2> WalkableCells => _walkableCells;
     public IReadOnlySet<Vector2> BuildableCells => _buildableCells;
 
-    public Terrain(ResponseGameInfo gameInfo) {
+    public Terrain(FootprintCalculator footprintCalculator, ResponseGameInfo gameInfo, Units units) {
+        _footprintCalculator = footprintCalculator;
+
         MaxX = gameInfo.StartRaw.MapSize.X;
         MaxY = gameInfo.StartRaw.MapSize.Y;
 
-        _cellHeights = InitCellHeights(gameInfo);
-        _walkableCells = InitWalkableCells(gameInfo);
-        _cells = _walkableCells.ToHashSet(); // At the start of the game, all playable cells are walkable because no obstructions are in direct sight.
-        _buildableCells = InitBuildableCells(gameInfo);
+        _cellHeights = ParseCellHeights(gameInfo);
+
+        Update(gameInfo, units);
+
+        _cells = _walkableCells.ToHashSet();
+        _cells.UnionWith(ComputeStartingBuildingCells(units));
+        _cells.UnionWith(_obstructedCells);
     }
 
-    public void Update(ResponseObservation observation) {
-        // TODO GD Update walkables/buildables?
+    /// <summary>
+    /// Updates the obstructed, walkable and buildable cells.
+    /// </summary>
+    /// <param name="gameInfo"></param>
+    /// <param name="units"></param>
+    public void Update(ResponseGameInfo gameInfo, Units units) {
+        // The game state is imperfect.
+        // Cells are walkable even if some obstacles are on them, because they could die in the fog of war.
+        // However, some obstacles are not walkable, even in the fog of war.
+        // We have to adjust this ourselves.
+        // There is also not a list of cells that would be walkable if all units were removed, so we have to compute it ourselves.
+        _obstructedCells = ComputeObstructedCells(units);
+
+        _walkableCells = ParseWalkableCells(gameInfo);
+        _walkableCells.ExceptWith(_obstructedCells);
+
+        _buildableCells = ParseBuildableCells(gameInfo);
+        _buildableCells.ExceptWith(_obstructedCells);
     }
 
-    private static Dictionary<Vector2, float> InitCellHeights(ResponseGameInfo gameInfo) {
+    private static Dictionary<Vector2, float> ParseCellHeights(ResponseGameInfo gameInfo) {
         var heightVector = gameInfo.StartRaw.TerrainHeight.Data
             .ToByteArray()
             .Select(ImageDataUtils.ByteToFloat)
@@ -47,7 +75,17 @@ public class Terrain : ITerrain {
         return heights;
     }
 
-    private static HashSet<Vector2> InitWalkableCells(ResponseGameInfo gameInfo) {
+    private HashSet<Vector2> ComputeObstructedCells(Units units) {
+        var obstacleIds = new HashSet<uint>(UnitTypeId.Obstacles.Concat(UnitTypeId.MineralFields).Concat(UnitTypeId.GasGeysers));
+        obstacleIds.Remove(UnitTypeId.UnbuildablePlatesDestructible); // It is destructible but you can walk on it
+
+        return UnitQueries.GetUnits(units.NeutralUnits, obstacleIds)
+            .SelectMany(_footprintCalculator.GetFootprint)
+            .Select(position => position.AsWorldGridCorner())
+            .ToHashSet();
+    }
+
+    private static HashSet<Vector2> ParseWalkableCells(ResponseGameInfo gameInfo) {
         var walkVector = gameInfo.StartRaw.PathingGrid.Data
             .ToByteArray()
             .SelectMany(ImageDataUtils.ByteToBoolArray)
@@ -67,7 +105,7 @@ public class Terrain : ITerrain {
         return walkableCells;
     }
 
-    private static HashSet<Vector2> InitBuildableCells(ResponseGameInfo gameInfo) {
+    private static HashSet<Vector2> ParseBuildableCells(ResponseGameInfo gameInfo) {
         var buildVector = gameInfo.StartRaw.PlacementGrid.Data
             .ToByteArray()
             .SelectMany(ImageDataUtils.ByteToBoolArray)
@@ -85,5 +123,11 @@ public class Terrain : ITerrain {
         }
 
         return buildableCells;
+    }
+
+    private IEnumerable<Vector2> ComputeStartingBuildingCells(Units units) {
+        return UnitQueries.GetUnits(units.OwnedUnits, UnitTypeId.Buildings)
+            .SelectMany(_footprintCalculator.GetFootprint)
+            .Select(position => position.AsWorldGridCorner());
     }
 }

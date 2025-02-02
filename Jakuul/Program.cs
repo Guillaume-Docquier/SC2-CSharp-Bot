@@ -10,12 +10,18 @@ var commandLineArgs = new CommandLineArguments(args);
 // DI
 var knowledgeBase = new KnowledgeBase();
 var frameClock = new FrameClock();
-var logger = new Logger(frameClock, logToStdOut: true);
+var logSinks = new List<ILogSink>
+{
+    new FileLogSink($"Logs/{DateTime.UtcNow:yyyy-MM-dd HH.mm.ss}.log"),
+    new ConsoleLogSink()
+};
+var logger = new Logger(logSinks, frameClock);
 var sc2Client = new Sc2Client(logger, GameDisplayMode.FullScreen);
+var footprintCalculator = new FootprintCalculator(knowledgeBase, logger);
 
 IGameConnection sc2GameConnection = commandLineArgs.LadderServerAddress != null
-    ? new LadderGameConnection(logger, sc2Client, knowledgeBase, commandLineArgs.LadderServerAddress, commandLineArgs.GamePort, commandLineArgs.StartPort)
-    : new LocalGameConnection(logger, sc2Client, knowledgeBase, new LocalGameConfiguration());
+    ? new LadderGameConnection(logger, sc2Client, knowledgeBase, footprintCalculator, commandLineArgs.LadderServerAddress, commandLineArgs.GamePort, commandLineArgs.StartPort)
+    : new LocalGameConnection(logger, sc2Client, knowledgeBase, footprintCalculator, new LocalGameConfiguration());
 
 // Play
 var game = await sc2GameConnection.JoinGame(Race.Zerg); // TODO GD The bot's race will be defined by the bot

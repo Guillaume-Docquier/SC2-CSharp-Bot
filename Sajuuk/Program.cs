@@ -66,10 +66,7 @@ public class Program {
             switch (args.Length) {
                 case 1 when args[0] == "--mapAnalysis":
                     PlayMapAnalysis(
-                        Maps.GetAll()
-                            // Blackburn has an isolated expand that breaks the analysis, we'll fix it if it comes back to the map pool
-                            .Except(new [] { Maps.Blackburn })
-                            .ToList()
+                        new List<string> { Maps.AncientCistern }
                     );
                     break;
                 case 1 when args[0] == "--videoClip":

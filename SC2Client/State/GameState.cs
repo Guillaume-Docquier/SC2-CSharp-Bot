@@ -6,8 +6,8 @@ using SC2Client.GameData;
 namespace SC2Client.State;
 
 public class GameState : IGameState {
-    private readonly Terrain _terrain;
     private readonly Units _units;
+    private readonly Terrain _terrain;
 
     public uint PlayerId { get; }
     public string MapName { get; }
@@ -22,6 +22,7 @@ public class GameState : IGameState {
         uint playerId,
         ILogger logger,
         KnowledgeBase knowledgeBase,
+        FootprintCalculator footprintCalculator,
         ResponseGameInfo gameInfo,
         Status gameStatus,
         ResponseObservation observation
@@ -30,8 +31,8 @@ public class GameState : IGameState {
         MapName = gameInfo.MapName;
         CurrentFrame = observation.Observation.GameLoop;
         Result = GetGameResult(gameStatus, observation);
-        _terrain = new Terrain(gameInfo);
         _units = new Units(logger, knowledgeBase, observation);
+        _terrain = new Terrain(footprintCalculator, gameInfo, _units);
 
         var startingTownHallPosition = UnitQueries.GetUnits(_units.OwnedUnits, UnitTypeId.TownHalls).First().Position.ToVector2();
         var startLocations = gameInfo.StartRaw.StartLocations
@@ -47,13 +48,12 @@ public class GameState : IGameState {
     /// </summary>
     /// <param name="gameStatus">The status of the game.</param>
     /// <param name="observation">The current game state observation.</param>
-    public void Update(Status gameStatus, ResponseObservation observation) {
+    public void Update(Status gameStatus, ResponseGameInfo gameInfo, ResponseObservation observation) {
         CurrentFrame = observation.Observation.GameLoop;
         Result = GetGameResult(gameStatus, observation);
 
-        // The order of updates is not important
-        _terrain.Update(observation);
         _units.Update(observation);
+        _terrain.Update(gameInfo, _units);
     }
 
     /// <summary>

@@ -6,7 +6,6 @@ namespace MapAnalysis.RegionAnalysis.Persistence;
 
 public class JsonMapDataRepository<TData> : IMapDataRepository<TData> {
     private readonly ILogger _logger;
-    private readonly Func<string, string> _getFileName;
 
     private readonly JsonSerializerOptions _jsonSerializerOptions = new JsonSerializerOptions
     {
@@ -19,37 +18,28 @@ public class JsonMapDataRepository<TData> : IMapDataRepository<TData> {
         },
     };
 
-    public JsonMapDataRepository(ILogger logger, Func<string, string> getFileName) {
+    public JsonMapDataRepository(ILogger logger) {
         _logger = logger;
-        _getFileName = getFileName;
     }
 
-    public void Save(TData data, string mapFileName) {
+    public void Save(TData data, string fileName) {
+        var fileNameWithExtension = $"{fileName}.{FileExtensions.Json}";
+        Directory.CreateDirectory(Path.GetDirectoryName(fileNameWithExtension)!);
+
         var jsonString = JsonSerializer.Serialize(data, _jsonSerializerOptions);
+        File.WriteAllText(fileNameWithExtension, jsonString);
 
         // Make sure to copy and set properties to 'Copy if newer'
-        // TODO GD Print it?
-
-        var fileName = _getFileName(mapFileName);
-        CreateDirectoryIfNotExists(fileName);
-        File.WriteAllText(fileName, jsonString);
-        _logger.Success($"JSON data saved to {fileName}");
+        _logger.Success($"JSON data saved to {fileNameWithExtension}");
     }
 
-    public TData Load(string mapFileName) {
-        var fileName = _getFileName(mapFileName);
-        if (!File.Exists(fileName)) {
+    public TData Load(string fileName) {
+        var fileNameWithExtension = $"{fileName}.{FileExtensions.Json}";
+        if (!File.Exists(fileNameWithExtension)) {
             return default;
         }
 
-        var jsonString = File.ReadAllText(fileName);
+        var jsonString = File.ReadAllText(fileNameWithExtension);
         return JsonSerializer.Deserialize<TData>(jsonString, _jsonSerializerOptions)!;
-    }
-
-    private static void CreateDirectoryIfNotExists(string filePath) {
-        var directory = Path.GetDirectoryName(filePath);
-        if (directory != null) {
-            Directory.CreateDirectory(directory);
-        }
     }
 }

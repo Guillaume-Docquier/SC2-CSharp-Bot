@@ -8,20 +8,11 @@ namespace SC2Client;
 /// </summary>
 public class Logger : ILogger {
     private readonly IFrameClock _frameClock;
-    private readonly bool _logToStdOut;
-    private readonly StreamWriter _fileStream;
+    private readonly List<ILogSink> _logSinks;
 
-    public Logger(IFrameClock frameClock, bool logToStdOut) {
+    public Logger(List<ILogSink> logSinks, IFrameClock frameClock) {
+        _logSinks = logSinks;
         _frameClock = frameClock;
-        _logToStdOut = logToStdOut;
-
-        // Open a logging file stream
-        // For performance reasons, the file stream is kept open
-        // For safety reasons, the file stream is set to auto flush
-        var logFile = "Logs/" + DateTime.UtcNow.ToString("yyyy-MM-dd HH.mm.ss") + ".log";
-        Directory.CreateDirectory(Path.GetDirectoryName(logFile)!);
-        _fileStream = new StreamWriter(logFile, append: true);
-        _fileStream.AutoFlush = true;
     }
 
     public ILogger CreateNamed(string name) {
@@ -34,12 +25,10 @@ public class Logger : ILogger {
     /// <param name="logLevel">The log level of the message.</param>
     /// <param name="message">The message to log.</param>
     private void WriteLine(string logLevel, string message) {
-        var msg = $"[{DateTime.UtcNow:HH:mm:ss} | {TimeUtils.GetGameTimeString(_frameClock.CurrentFrame)} @ {_frameClock.CurrentFrame,5}] {logLevel,7}: {message}";
+        var formattedMessage = $"[{DateTime.UtcNow:HH:mm:ss} | {TimeUtils.GetGameTimeString(_frameClock.CurrentFrame)} @ {_frameClock.CurrentFrame,5}] {logLevel,7}: {message}";
 
-        _fileStream.WriteLine(msg);
-
-        if (_logToStdOut) {
-            Console.WriteLine(msg);
+        foreach (var logSink in _logSinks) {
+            logSink.Log(formattedMessage);
         }
     }
 

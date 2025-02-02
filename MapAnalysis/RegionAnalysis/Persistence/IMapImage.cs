@@ -23,7 +23,7 @@ public interface IMapImage {
     /// Saves the image of the map.
     /// The image can be upscaled, the base is 1 pixel per map grid cell.
     /// </summary>
-    /// <param name="fileName">The name of the file to save to.</param>
+    /// <param name="fileName">The name of the file to save to, without the extension.</param>
     /// <param name="upscalingFactor">The factor to upscale the image before saving. An upscaling factor of 2 would double the width and height.</param>
     void Save(string fileName, int upscalingFactor = 4);
 }

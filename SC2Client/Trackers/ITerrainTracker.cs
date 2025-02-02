@@ -1,5 +1,4 @@
 ﻿using System.Numerics;
-using SC2Client.State;
 
 namespace SC2Client.Trackers;
 
@@ -13,6 +12,13 @@ public interface ITerrainTracker {
     /// The map's height
     /// </summary>
     int MaxY { get; }
+
+    /// <summary>
+    /// The set of all Cells that can be played on.
+    /// This is the sum of all walkable Cells and obstructed Cells.
+    /// The cells are expressed as their corner.
+    /// </summary>
+    IReadOnlySet<Vector2> Cells { get; }
 
     /// <summary>
     /// The set of all cells that are currently obstructed.

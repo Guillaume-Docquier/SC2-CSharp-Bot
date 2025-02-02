@@ -1,16 +1,19 @@
 ﻿using MapAnalysis;
 using SC2APIProtocol;
 using SC2Client;
+using SC2Client.Trackers;
 
-var mapsToAnalyze = Maps.GetAll()
-    // Blackburn has an isolated expand that breaks the analysis, we'll fix it if it comes back to the map pool
-    .Except(new[] { Maps.Blackburn })
-    .ToList();
+var mapsToAnalyze = new List<string> { Maps.AncientCistern };
 
-var mapIndex = 1;
-foreach (var mapToAnalyze in mapsToAnalyze) {
-    var services = ServicesFactory.CreateServices(mapToAnalyze);
-    var logger = services.Logger.CreateNamed("Game Loop");
+var logSinks = new List<ILogSink>
+{
+    new FileLogSink($"Logs/{DateTime.UtcNow:yyyy-MM-dd HH.mm.ss}.log"),
+    new ConsoleLogSink()
+};
+var logger = new Logger(logSinks, new FrameClock()).CreateNamed("Program");
+
+foreach (var (mapToAnalyze, mapIndex) in mapsToAnalyze.Select((map, i) => (map, i + 1))) {
+    var services = ServicesFactory.CreateServices(logSinks, mapToAnalyze);
 
     logger.Important($"Analyzing map: {mapToAnalyze} ({mapIndex}/{mapsToAnalyze.Count})");
 
@@ -34,6 +37,6 @@ foreach (var mapToAnalyze in mapsToAnalyze) {
     logger.Success($"Analysis on {mapToAnalyze} complete!");
 
     game.Quit();
-
-    mapIndex++;
 }
+
+logger.Success($"Map analysis complete! ({mapsToAnalyze.Count}/{mapsToAnalyze.Count})");

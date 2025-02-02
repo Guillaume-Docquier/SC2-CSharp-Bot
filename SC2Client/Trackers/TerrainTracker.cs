@@ -1,15 +1,11 @@
 ﻿using System.Numerics;
 using Algorithms.ExtensionMethods;
 using SC2Client.ExtensionMethods;
-using SC2Client.GameData;
-using SC2Client.PubSub.Events;
 using SC2Client.State;
 
 namespace SC2Client.Trackers;
 
 public class TerrainTracker : ITracker, ITerrainTracker {
-    private readonly FootprintCalculator _footprintCalculator;
-    private readonly IUnitsTracker _unitsTracker;
     private readonly ILogger _logger;
 
     private bool _isInitialized = false;
@@ -19,15 +15,7 @@ public class TerrainTracker : ITracker, ITerrainTracker {
     /// </summary>
     private ITerrain _terrain = null!;
 
-    /// <summary>
-    /// The cells are expressed as their corner.
-    /// </summary>
-    private readonly HashSet<Vector2> _obstructedCells = new HashSet<Vector2>();
-    private List<IUnit> _obstacles = new List<IUnit>();
-
-    public TerrainTracker(FootprintCalculator footprintCalculator, IUnitsTracker unitsTracker, ILogger logger) {
-        _footprintCalculator = footprintCalculator;
-        _unitsTracker = unitsTracker;
+    public TerrainTracker(ILogger logger) {
         _logger = logger.CreateNamed("TerrainTracker");
     }
 
@@ -38,15 +26,14 @@ public class TerrainTracker : ITracker, ITerrainTracker {
             return;
         }
 
-        InitObstacles();
-
         _isInitialized = true;
     }
 
     public int MaxX => _terrain.MaxX;
     public int MaxY => _terrain.MaxY;
 
-    public IEnumerable<Vector2> ObstructedCells => _obstructedCells;
+    public IReadOnlySet<Vector2> Cells => _terrain.Cells;
+    public IEnumerable<Vector2> ObstructedCells => _terrain.ObstructedCells;
 
     public Vector3 WithWorldHeight(Vector2 cell, float zOffset = 0) {
         if (!IsWithinBounds(cell)) {
@@ -69,8 +56,8 @@ public class TerrainTracker : ITracker, ITerrainTracker {
             return false;
         }
 
-        if (considerObstructions && IsObstructed(cell)) {
-            return false;
+        if (!considerObstructions && IsObstructed(cell)) {
+            return true;
         }
 
         return _terrain.WalkableCells.Contains(cell.AsWorldGridCorner());
@@ -81,15 +68,15 @@ public class TerrainTracker : ITracker, ITerrainTracker {
             return false;
         }
 
-        if (considerObstructions && IsObstructed(cell)) {
-            return false;
+        if (!considerObstructions && IsObstructed(cell)) {
+            return true;
         }
 
         return _terrain.BuildableCells.Contains(cell.AsWorldGridCorner());
     }
 
     public bool IsObstructed(Vector2 cell) {
-        return _obstructedCells.Contains(cell.AsWorldGridCorner());
+        return _terrain.ObstructedCells.Contains(cell.AsWorldGridCorner());
     }
 
     public bool IsWithinBounds(Vector2 position) {
@@ -181,25 +168,5 @@ public class TerrainTracker : ITracker, ITerrainTracker {
         }
 
         return closestWalkableCell;
-    }
-
-    private void InitObstacles() {
-        var obstacleIds = new HashSet<uint>(UnitTypeId.Obstacles.Concat(UnitTypeId.MineralFields).Concat(UnitTypeId.GasGeysers));
-        obstacleIds.Remove(UnitTypeId.UnbuildablePlatesDestructible); // It is destructible but you can walk on it
-
-        _obstacles = UnitQueries.GetUnits(_unitsTracker.NeutralUnits, obstacleIds).ToList();
-        _obstacles.ForEach(obstacle => {
-            obstacle.Register(OnObstacleRemoved);
-            foreach (var cell in _footprintCalculator.GetFootprint(obstacle)) {
-                _obstructedCells.Add(cell.AsWorldGridCorner());
-            }
-        });
-    }
-
-    private void OnObstacleRemoved(UnitDeath unitDeath) {
-        _obstacles.Remove(unitDeath.unit);
-        foreach (var cell in _footprintCalculator.GetFootprint(unitDeath.unit)) {
-            _obstructedCells.Remove(cell);
-        }
     }
 }
